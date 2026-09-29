@@ -1,0 +1,15 @@
+[Unit]
+Description=Lumen Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/home/botuser/lumen-bot
+EnvironmentFile=/home/botuser/lumen-bot/.env
+ExecStart=/home/botuser/lumen-bot/venv/bin/python /home/botuser/lumen-bot/bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
