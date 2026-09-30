@@ -15,8 +15,7 @@ MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 # Список моделей Mistral — бот пробует их по очереди, если одна перегружена
 FALLBACK_MODELS = [
     os.getenv("MODEL", "mistral-small-latest"),
-    "open-mistral-7b",
-    "open-mixtral-8x7b",
+    "mistral-medium-latest",
 ]
 
 if not TELEGRAM_BOT_TOKEN:
@@ -45,6 +44,7 @@ def load_system_prompt():
         return "Ты — Lumen, мыслящий собеседник."
 
 SYSTEM_PROMPT = load_system_prompt()
+logger.info(f"System prompt загружен: {len(SYSTEM_PROMPT)} символов")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,6 +69,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_text},
                 ],
+                temperature=0.8,
+                max_tokens=500,
             )
             reply_text = response.choices[0].message.content
             logger.info(f"Ответ получен от модели: {model}")
