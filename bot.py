@@ -15,8 +15,8 @@ MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 # Список моделей Mistral — бот пробует их по очереди, если одна перегружена
 FALLBACK_MODELS = [
     os.getenv("MODEL", "mistral-small-latest"),
-    "mistral-medium-latest",
     "open-mistral-7b",
+    "open-mixtral-8x7b",
 ]
 
 if not TELEGRAM_BOT_TOKEN:
@@ -35,6 +35,16 @@ client = OpenAI(
     base_url="https://api.mistral.ai/v1",
     api_key=MISTRAL_API_KEY,
 )
+
+
+def load_system_prompt():
+    try:
+        with open("system_prompt.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Ты — Lumen, мыслящий собеседник."
+
+SYSTEM_PROMPT = load_system_prompt()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -56,6 +66,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             response = client.chat.completions.create(
                 model=model,
                 messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_text},
                 ],
             )
@@ -69,9 +80,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if reply_text is None:
         logger.error(f"Все модели недоступны. Последняя ошибка: {last_error}")
+        # Временно показываем настоящую ошибку в Telegram, чтобы понять причину
         reply_text = (
             "Сейчас модели Mistral перегружены или закончился баланс. "
             "Попробуй написать ещё раз через минуту."
+            f"\n\nDEBUG: {str(last_error)[:500]}"
         )
 
     await context.bot.send_message(chat_id=chat_id, text=reply_text)
