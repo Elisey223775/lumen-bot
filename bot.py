@@ -12,29 +12,33 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+# Универсальный провайдер: Mistral по умолчанию, llm7/OpenRouter через .env
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.mistral.ai/v1")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("MISTRAL_API_KEY")
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("MODEL", "mistral-small-latest")
+LLM_FALLBACK = os.getenv("LLM_FALLBACK", "")
 
-# Список моделей Mistral — бот пробует их по очереди, если одна перегружена
-FALLBACK_MODELS = [
-    os.getenv("MODEL", "mistral-small-latest"),
-    "mistral-medium-latest",
-]
+# Список моделей — основная + запасная, если одна перегружена
+FALLBACK_MODELS = [m for m in [LLM_MODEL, LLM_FALLBACK] if m]
+if not FALLBACK_MODELS:
+    FALLBACK_MODELS = ["mistral-small-latest"]
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN не найден в .env")
-if not MISTRAL_API_KEY:
-    raise RuntimeError("MISTRAL_API_KEY не найден в .env")
+if not LLM_API_KEY:
+    raise RuntimeError("LLM_API_KEY (или MISTRAL_API_KEY) не найден в .env")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+logger.info(f"LLM: {LLM_BASE_URL} | модель: {LLM_MODEL}")
 
-# Клиент для Mistral AI (использует формат OpenAI SDK)
+# Клиент OpenAI-совместимый (Mistral / llm7 / OpenRouter — через .env)
 client = OpenAI(
-    base_url="https://api.mistral.ai/v1",
-    api_key=MISTRAL_API_KEY,
+    base_url=LLM_BASE_URL,
+    api_key=LLM_API_KEY,
 )
 
 
@@ -62,7 +66,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     reply_text = None
     last_error = None
 
-    # Пробуем модели по очереди. 429 = лимит Mistral, ждём и пробуем ещё раз.
+    # Пробуем модели по очереди. 429 = лимит провайдера, ждём и пробуем ещё раз.
     for model in FALLBACK_MODELS:
         for attempt in (1, 2):
             try:
@@ -95,12 +99,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         err = str(last_error)[:300] if last_error else "unknown"
         if "429" in err:
             reply_text = (
-                "Мистраль упёрся в лимит (429). Подожди минуту и напиши ещё раз — "
-                "это не бот, это лимит бесплатного тарифа."
+                "Провайдер упёрся в лимит (429). Подожди минуту и напиши ещё раз."
             )
+        elif "401" in err or "403" in err or "Unauthorized" in err:
+            reply_text = "Ключ API не подошёл (401/403). Проверь LLM_API_KEY в .env."
         else:
             reply_text = (
-                "Сейчас модели Mistral недоступны. "
+                "Сейчас модель недоступна. "
                 "Попробуй ещё раз через минуту."
             )
 
