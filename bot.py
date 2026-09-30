@@ -16,7 +16,12 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # через .env можно переключить на llm7 / Mistral / OpenRouter
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://text.pollinations.ai/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("MISTRAL_API_KEY") or "no-key"
-LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("MODEL", "openai-fast")
+_LLM_MODEL_RAW = os.getenv("LLM_MODEL") or os.getenv("MODEL", "openai-fast")
+# Защита от старого .env: модель mistral-* на Pollinations не существует
+if "pollinations" in LLM_BASE_URL and "mistral" in _LLM_MODEL_RAW.lower():
+    LLM_MODEL = "openai-fast"
+else:
+    LLM_MODEL = _LLM_MODEL_RAW
 LLM_FALLBACK = os.getenv("LLM_FALLBACK", "")
 
 # Список моделей — основная + запасная, если одна перегружена
