@@ -1,5 +1,7 @@
+import asyncio
 import os
 import logging
+import time
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -60,34 +62,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     reply_text = None
     last_error = None
 
-    # Пробуем модели по очереди. Если одна перегружена (429) — переходим к следующей.
+    # Пробуем модели по очереди. 429 = лимит Mistral, ждём и пробуем ещё раз.
     for model in FALLBACK_MODELS:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_text},
-                ],
-                temperature=0.8,
-                max_tokens=500,
-            )
-            reply_text = response.choices[0].message.content
-            logger.info(f"Ответ получен от модели: {model}")
+        for attempt in (1, 2):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_text},
+                    ],
+                    temperature=0.8,
+                    max_tokens=500,
+                )
+                reply_text = response.choices[0].message.content
+                logger.info(f"Ответ получен от модели: {model}")
+                break
+            except Exception as e:
+                last_error = e
+                msg = str(e)
+                logger.warning(f"Модель {model} попытка {attempt}: {msg[:300]}")
+                # 429 — подождать 8 сек и повторить, иначе сразу следующая модель
+                if "429" in msg and attempt == 1:
+                    await asyncio.sleep(8)
+                    continue
+                break
+        if reply_text:
             break
-        except Exception as e:
-            last_error = e
-            logger.warning(f"Модель {model} недоступна ({e}), пробуем следующую")
-            continue
 
     if reply_text is None:
         logger.error(f"Все модели недоступны. Последняя ошибка: {last_error}")
-        # Временно показываем настоящую ошибку в Telegram, чтобы понять причину
-        reply_text = (
-            "Сейчас модели Mistral перегружены или закончился баланс. "
-            "Попробуй написать ещё раз через минуту."
-            f"\n\nDEBUG: {str(last_error)[:500]}"
-        )
+        err = str(last_error)[:300] if last_error else "unknown"
+        if "429" in err:
+            reply_text = (
+                "Мистраль упёрся в лимит (429). Подожди минуту и напиши ещё раз — "
+                "это не бот, это лимит бесплатного тарифа."
+            )
+        else:
+            reply_text = (
+                "Сейчас модели Mistral недоступны. "
+                "Попробуй ещё раз через минуту."
+            )
 
     await context.bot.send_message(chat_id=chat_id, text=reply_text)
 
