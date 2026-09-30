@@ -12,10 +12,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-# Универсальный провайдер: Mistral по умолчанию, llm7/OpenRouter через .env
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.mistral.ai/v1")
-LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("MISTRAL_API_KEY")
-LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("MODEL", "mistral-small-latest")
+# Универсальный провайдер: по умолчанию Pollinations (без ключа),
+# через .env можно переключить на llm7 / Mistral / OpenRouter
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://text.pollinations.ai/v1")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("MISTRAL_API_KEY") or "no-key"
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("MODEL", "openai-fast")
 LLM_FALLBACK = os.getenv("LLM_FALLBACK", "")
 
 # Список моделей — основная + запасная, если одна перегружена
@@ -25,8 +26,7 @@ if not FALLBACK_MODELS:
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN не найден в .env")
-if not LLM_API_KEY:
-    raise RuntimeError("LLM_API_KEY (или MISTRAL_API_KEY) не найден в .env")
+# LLM_API_KEY может быть "no-key" для бесплатных endpoint без авторизации
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
